@@ -1,0 +1,10 @@
+{
+    "en": {
+        "liveframe-plugin.lfa.export": "Export animations to LFA",
+        "liveframe-plugin.export.lfa.relativize_transforms": "Relativize transforms"
+    },
+    "ru": {
+        "liveframe-plugin.lfa.export": "Экспорт анимаций в LFA",
+        "liveframe-plugin.export.lfa.relativize_transforms": "Релятивизировать трансформации"
+    }
+}

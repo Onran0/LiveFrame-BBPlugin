@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# npm
+npm-debug.log*
+
+# IDEA
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+dist/
