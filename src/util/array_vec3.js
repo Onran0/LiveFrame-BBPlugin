@@ -1,0 +1,107 @@
+/*
+ *    Copyright 2026 Onran
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
+
+export function equals(a, b) {
+    return a[0] === b[0] && b[1] === b[1] && a[2] === b[2]
+}
+
+export function sub(a, b) {
+    return [
+        a[0] - b[0],
+        a[1] - b[1],
+        a[2] - b[2]
+    ]
+}
+
+export function add(a, b) {
+    return [
+        a[0] + b[0],
+        a[1] + b[1],
+        a[2] + b[2]
+    ]
+}
+
+export function mul(a, b) {
+    return [
+        a[0] * b[0],
+        a[1] * b[1],
+        a[2] * b[2]
+    ]
+}
+
+export function div(a, b) {
+    return [
+        a[0] / b[0],
+        a[1] / b[1],
+        a[2] / b[2]
+    ]
+}
+
+export function div_scalar(a, b) {
+    return [
+        a[0] / b,
+        a[1] / b,
+        a[2] / b
+    ]
+}
+
+export function map(v, fn) {
+    return [
+        fn(v[0]),
+        fn(v[1]),
+        fn(v[2])
+    ]
+}
+
+export function is_zero(v) {
+    return v[0] === 0 &&
+           v[1] === 0 &&
+           v[2] === 0
+}
+
+export function dot(a, b) {
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
+}
+
+export function cross(a, b) {
+    return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+    ]
+}
+
+export function scale(a, b) {
+    if (typeof(b) == "number") {
+        return [
+            a[0] * b,
+            a[1] * b,
+            a[2] * b
+        ]
+    } else {
+        return [
+            a[0] * b[0],
+            a[1] * b[1],
+            a[2] * b[2]
+        ]
+    }
+}
+
+export function rotate_quat(v, q) {
+    const vec = new THREE.Vector3(v[0], v[1], v[2])
+    vec.applyQuaternion(q)
+    return [vec.x, vec.y, vec.z]
+}
