@@ -15,9 +15,14 @@
  */
 
 import * as avec3 from "./util/array_vec3"
+import { prettify, prettyJoin } from "./util/floats_prettifier"
 
 function getSamplesInterval() {
     return 1 / Math.clamp(settings.animation_sample_rate.value, 0.1, 144)
+}
+
+function isEqualsByEpsilon(a, b, epsilon) {
+    return Math.abs(a - b) < epsilon
 }
 
 function bakeSegment(animator, channel, timeFrom, timeTo) {
@@ -147,6 +152,7 @@ function exportBody(options) {
 
     for(const animation of Animator.animations) {
         const looped = animation.loop === "loop"
+        const duration = animation.length
 
         /*
         [
@@ -226,7 +232,7 @@ function exportBody(options) {
                         let destBoneKeyframeIndex
 
                         for(let i = 0;i < boneKeyframes.length;i++) {
-                            if(Math.epsilon(boneKeyframes[i].time, keyframe.time, floatTimeEpsilon)) {
+                            if(isEqualsByEpsilon(boneKeyframes[i].time, keyframe.time, floatTimeEpsilon)) {
                                 destBoneKeyframeIndex = i
                                 break
                             }
@@ -257,13 +263,13 @@ function exportBody(options) {
                     let destGeneralKeyframeIndex
 
                     for(let i = 0;i < keyframes.length;i++) {
-                        if(Math.epsilon(keyframes[i].time, boneKeyframeTime, floatTimeEpsilon)) {
+                        if(isEqualsByEpsilon(keyframes[i].time, boneKeyframeTime, floatTimeEpsilon)) {
                             destGeneralKeyframeIndex = i
                             break
                         }
                     }
 
-                    if(destGeneralKeyframeIndex) {
+                    if(destGeneralKeyframeIndex != null) {
                         keyframes[destGeneralKeyframeIndex].bones[boneName] = boneKeyframe
                     } else {
                         keyframes.push({
@@ -285,6 +291,8 @@ function exportBody(options) {
 
         builder.push('@clip name "')
         builder.push(animation.name)
+        builder.push('" duration ')
+        builder.push(duration)
         builder.push(' loop ')
         builder.push(looped)
 
@@ -324,11 +332,11 @@ function exportBody(options) {
                         customInterpsBuilder.push(`@interp id "${customInterpsCount++}" type "cubic-spline" {\n`)
 
                         customInterpsBuilder.push(`\t@field name "in-tangent" value (${
-                            extra["in-tangent"].join(', ')
+                            prettyJoin(extra["in-tangent"], ', ')
                         })`)
 
                         customInterpsBuilder.push(`\n\t@field name "out-tangent" value (${
-                            extra["out-tangent"].join(', ')
+                            prettyJoin(extra["out-tangent"], ', ')
                         })`)
 
                         customInterpsBuilder.push("\n}\n\n")
@@ -336,14 +344,14 @@ function exportBody(options) {
                         bonesBuilder.push(customInterpsCount)
                     }
 
-                    bonesBuilder.push(`" value (${channelData.value.join(', ')})\n`)
+                    bonesBuilder.push(`" value (${prettyJoin(channelData.value, ', ')})\n`)
                 }
 
                 bonesBuilder.push("\t\t}\n")
             }
 
             if(atLeastOneBonePushed) {
-                builder.push(`\n\t@keyframe time ${kfTime} {`)
+                builder.push(`\n\t@keyframe time ${prettify(kfTime)} {`)
 
                 builder.push(...bonesBuilder)
 
@@ -380,19 +388,19 @@ export default function doExport(options) {
 
         if(!avec3.equals(boneBindPose.position, [ 0, 0, 0 ])) {
             builder.push(' position (')
-            builder.push(boneBindPose.position.join(', '))
+            builder.push(prettyJoin(boneBindPose.position, ', '))
             builder.push(')')
         }
 
         if(!avec3.equals(boneBindPose.rotation, [ 0, 0, 0 ])) {
             builder.push(' rotation (')
-            builder.push(boneBindPose.rotation.join(', '))
+            builder.push(prettyJoin(boneBindPose.rotation, ', '))
             builder.push(')')
         }
 
         if(!avec3.equals(boneBindPose.scale, [ 1, 1, 1 ])) {
             builder.push(' scale (')
-            builder.push(boneBindPose.scale.join(', '))
+            builder.push(prettyJoin(boneBindPose.scale, ', '))
             builder.push(')')
         }
     }
