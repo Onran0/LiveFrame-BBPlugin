@@ -16,7 +16,7 @@
 
 const version = '1.0.0'
 
-// import pluginIcon from '../assets/plugin/icon.png'
+import pluginIcon from '../assets/plugin/icon.png'
 
 import exportLfa from './lfa_exporter'
 
@@ -27,11 +27,11 @@ for(let lang in translations)
 
 let actions = [ ]
 
-Plugin.register('liveframe-plugin', {
+Plugin.register('liveframe_plugin', {
     title: 'LiveFrame Plugin',
     author: 'Onran',
     description: 'Plugin for exporting animations to LFA (LiveFrame Animation)',
-    icon: "icon-keyframe",
+    icon: pluginIcon,
     version: version,
     variant: 'both',
 
@@ -45,11 +45,6 @@ Plugin.register('liveframe-plugin', {
                 relativizeTransforms: {
                     type: "checkbox",
                     label: "liveframe-plugin.export.lfa.relativize_transforms",
-                    value: true
-                },
-                removeLastKeysIfLooped: {
-                    type: "checkbox",
-                    label: "liveframe-plugin.export.lfa.last_keys_remove_if_loop",
                     value: true
                 }
             },

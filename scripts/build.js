@@ -28,20 +28,20 @@ function failedHandler(reason) {
 esbuild.build({
     entryPoints: ['src/plugin.js'],
     bundle: true,
-    outfile: 'dist/liveframe-plugin/liveframe-plugin.js',
+    outfile: 'dist/liveframe_plugin/liveframe_plugin.js',
     minify: true,
     loader: { '.png': 'file', '.svg': 'file' },
     assetNames: '[name]',
 }).then(() => {
-    console.log(`archiving to "liveframe-plugin.zip"`)
+    console.log(`archiving to "liveframe_plugin.zip"`)
 
-    const output = fs.createWriteStream('dist/liveframe-plugin.zip')
+    const output = fs.createWriteStream('dist/liveframe_plugin.zip')
 
     const archive = archiver('zip', undefined)
 
     archive.pipe(output)
 
-    archive.directory('dist/liveframe-plugin/', "liveframe-plugin/", undefined)
+    archive.directory('dist/liveframe_plugin/', "liveframe_plugin/", undefined)
 
     archive.finalize().then(() => {
         console.log('build finished!')
