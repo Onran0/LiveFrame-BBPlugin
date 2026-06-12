@@ -14,6 +14,10 @@
  *    limitations under the License.
  */
 
+export function from_object(obj) {
+    return [ obj.x, obj.y, obj.z ]
+}
+
 export function equals(a, b) {
     return a[0] === b[0] && b[1] === b[1] && a[2] === b[2]
 }

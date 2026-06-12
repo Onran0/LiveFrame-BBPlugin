@@ -16,33 +16,137 @@
 
 import * as avec3 from "./util/array_vec3"
 
-const BlockbenchInterpToLFA = {
-    position: {
-        "step": "step",
-        "linear": "lerp",
-        "catmullrom": "cubic-spline"
-    },
+function getSamplesInterval() {
+    return 1 / Math.clamp(settings.animation_sample_rate.value, 0.1, 144)
+}
 
-    rotation: {
-        "step": "step",
-        "linear": "slerp",
-        "catmullrom": "squad"
-    },
+function bakeSegment(animator, channel, timeFrom, timeTo) {
+    const interval = getSamplesInterval()
 
-    scale: {
-        "step": "step",
-        "linear": "lerp",
-        "catmullrom": "cubic-spline"
+    let values = [ ]
+
+    const prevTimelineTime = Timeline.time
+
+    for (let time = timeFrom; time < timeTo; time += interval) {
+        Timeline.setTime(time)
+
+        values.push({
+            time: time,
+            value: animator.interpolate(channel, false)
+        })
     }
+
+    Timeline.setTime(prevTimelineTime)
+
+    return values
+}
+
+function splitRotationKeyframe(animator, keyframes, keyIndex) {
+    let finalKeyframes = [ ]
+
+    const keyframe = keyframes[keyIndex]
+
+    if(keyframe.interpolation === "step" || keyIndex === keyframes.length - 1) {
+        finalKeyframes.push(
+            {
+                time: keyframe.time,
+                value: avec3.from_object(keyframe.data_points[0]),
+                interp: "step"
+            }
+        )
+    } else {
+        let bakedKeyframes = bakeSegment(
+            animator, "rotation",
+            keyframe.time, keyframes[keyIndex + 1].time
+        )
+
+        bakedKeyframes.forEach(
+            keyframe => {
+                keyframe.interp = "nlerp"
+                return keyframe
+            }
+        )
+
+        finalKeyframes.push(...bakedKeyframes)
+    }
+
+    return finalKeyframes
+}
+
+function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
+    let finalKeyframes = [ ]
+
+    const keyframe = keyframes[keyIndex]
+
+    let bake = false
+
+    if(
+        keyframe.interpolation === "step" ||
+        keyframe.interpolation === "linear" ||
+        keyIndex === keyframes.length - 1
+    ) {
+        finalKeyframes.push(
+            {
+                time: keyframe.time,
+                value: avec3.from_object(keyframe.data_points[0]),
+                interp: keyframe.interpolation === "step" ? "step" : "lerp"
+            }
+        )
+    } else if(keyframe.interpolation === "catmullrom") {
+        if(keyframes.length > 2) {
+            const key_prev = keyIndex === 0 ? keyframe : keyframes[keyframes.length - 1]
+            const key_next = keyframes[keyIndex + 1]
+            const key_next_next = keyIndex === keyframes.length - 2 ? key_next : keyframes[keyIndex + 2]
+
+            const val_prev = avec3.from_object(key_prev.data_points[0])
+            const val_curr = avec3.from_object(keyframe.data_points[0])
+            const val_next = avec3.from_object(key_next.data_points[0])
+            const val_next_next = avec3.from_object(key_next_next.data_points[0])
+
+            finalKeyframes.push(
+                {
+                    time: keyframe.time,
+                    value: val_curr,
+                    interp: "cubic-spline",
+                    extra: {
+                        "in-tangent": avec3.div_scalar(avec3.sub(val_next, val_prev), 2),
+                        "out-tangent": avec3.div_scalar(avec3.sub(val_next_next, val_curr), 2)
+                    }
+                }
+            )
+        } else bake = true
+    } else bake = true
+
+    if(bake) {
+        let bakedKeyframes = bakeSegment(
+            animator, channel,
+            keyframe.time, keyframes[keyIndex + 1].time
+        )
+
+        bakedKeyframes.forEach(
+            keyframe => {
+                keyframe.interp = "lerp"
+                return keyframe
+            }
+        )
+
+        finalKeyframes.push(...bakedKeyframes)
+    }
+
+    return finalKeyframes
 }
 
 function exportBody(options) {
+    const floatTimeEpsilon = 1/1200
+
     let skeletonBones = { }
+    let customInterpsBuilder = [ ]
     let builder = [ ]
 
-    for(const animation of Project.animations) {
+    let customInterpsCount = 0
+
+    for(const animation of Animator.animations) {
         const looped = animation.loop === "loop"
-        let duration = animation.length
 
         /*
         [
@@ -50,26 +154,41 @@ function exportBody(options) {
                 "time": 0.5,
                 "bones": {
                     "spine": {
-                        "position": {
+                        "position|scale": {
                             "value": [
                                 0, // x
                                 0, // y
                                 0  // z
                             ],
 
-                            "outInterpolationType": "catmullrom"
+                            "extra": {
+                                "in-tangent": [ 0, 0, 0 ],
+                                "out-tangent": [ 0, 0, 0 ]
+                            },
+
+                            "interp": "step|lerp|cubic-spline"
+                        },
+
+                        "rotation": {
+                            "value": [
+                                0, // x
+                                0, // y
+                                0, // z
+                            ],
+
+                            "interp": "step|nlerp"
                         }
                     }
                 }
             }
         ]
          */
-        let lfaKeyframes = [ ]
+        let keyframes = [ ]
 
         for(const animatorKey in animation.animators) {
             const animator = animation.animators[animatorKey]
 
-            if(animator instanceof BoneAnimator) {
+            if(['bone', 'armature_bone'].includes(animator.type) && animator.getGroup()) {
                 const group = animator.getGroup()
                 const boneName = group.name
 
@@ -79,86 +198,80 @@ function exportBody(options) {
                     scale: [ 1, 1, 1 ]
                 }
 
-                let minKfTime = undefined
-                let prevMaxKfTime = 0
-                let maxKfTime = 0
+                let channelKeyframes = {
+                    "position": [ ],
+                    "rotation": [ ],
+                    "scale": [ ]
+                }
 
-                let firstKf = null
-                let lastKf = null
+                for(const channel of Object.keys(channelKeyframes)) {
+                    const keyframes = animator[channel]
 
-                for(const keyframe of animator.keyframes) {
-                    if(keyframe.interpolation === "bezier") {
-                        console.error("plugin doesn't support export of bezier keyframes")
-                        continue
-                    }
+                    for(let i = 0; i < keyframes.length; i++) {
+                        let splitKeyframes
 
-                    const kfTime = keyframe.time
+                        if(channel === "rotation")
+                            splitKeyframes = splitRotationKeyframe(animator, keyframes, i)
+                        else
+                            splitKeyframes = splitPositionOrScaleKeyframe(animator, keyframes, i, channel)
 
-                    let lfaKeyframe = lfaKeyframes.find(x => x.time === kfTime)
-
-                    if(lfaKeyframe == null) {
-                        lfaKeyframe = { time: kfTime, bones: { } }
-                        lfaKeyframes.push(lfaKeyframe)
-                    }
-
-                    if(kfTime > maxKfTime) {
-                        prevMaxKfTime = maxKfTime
-                        maxKfTime = kfTime
-
-                        lastKf = lfaKeyframe
-                    }
-
-                    if(minKfTime == null || kfTime < minKfTime) {
-                        minKfTime = kfTime
-
-                        firstKf = lfaKeyframe
-                    }
-
-                    let lfaBoneObject = lfaKeyframe.bones[boneName]
-
-                    if(lfaBoneObject == null) {
-                        lfaBoneObject = lfaKeyframe.bones[boneName] = { }
-                    }
-
-                    let { x, y, z } = keyframe.data_points[0]
-
-                    // converting blockbench pixels to meters
-
-                    if(keyframe.channel === "position") {
-                        x /= 16
-                        y /= 16
-                        z /= 16
-                    }
-
-                    lfaBoneObject[keyframe.channel] = {
-                        value: [ x, y, z ],
-                        outInterpolationType: keyframe.interpolation
+                        channelKeyframes[channel].push(...splitKeyframes)
                     }
                 }
 
-                if(looped && options.removeLastKeysIfLooped && lastKf != null) {
-                    for(const boneName of Object.keys(lastKf.bones)) {
-                        if(firstKf.bones[boneName] != null) {
-                            const firstKfBone = firstKf.bones[boneName]
-                            const lastKfBone = lastKf.bones[boneName]
+                let boneKeyframes = [ ]
 
-                            const channelsToRemove = []
+                for(const channel of Object.keys(channelKeyframes)) {
+                    for(const keyframe of Object.values(channelKeyframes[channel])) {
+                        let destBoneKeyframeIndex
 
-                            for(const channelName in lastKfBone) {
-                                if(firstKfBone[channelName] != null) {
-                                    if(
-                                        avec3.equals(
-                                            firstKfBone[channelName].value,
-                                            lastKfBone[channelName].value
-                                        )
-                                    ) channelsToRemove.push(channelName)
-                                }
-                            }
-
-                            for(const channelName of channelsToRemove) {
-                                delete lastKfBone[channelName]
+                        for(let i = 0;i < boneKeyframes.length;i++) {
+                            if(Math.epsilon(boneKeyframes[i].time, keyframe.time, floatTimeEpsilon)) {
+                                destBoneKeyframeIndex = i
+                                break
                             }
                         }
+
+                        const generalChannelKeyframe = {
+                            value: keyframe.value,
+                            interp: keyframe.interp,
+                            extra: keyframe.extra
+                        }
+
+                        if(destBoneKeyframeIndex) {
+                            boneKeyframes[destBoneKeyframeIndex][channel] = generalChannelKeyframe
+                        } else {
+                            boneKeyframes.push({
+                                time: keyframe.time,
+                                [channel]: generalChannelKeyframe
+                            })
+                        }
+                    }
+                }
+
+                for(const boneKeyframe of Object.values(boneKeyframes)) {
+                    const boneKeyframeTime = boneKeyframe.time
+
+                    delete boneKeyframe.time
+
+                    let destGeneralKeyframeIndex
+
+                    for(let i = 0;i < keyframes.length;i++) {
+                        if(Math.epsilon(keyframes[i].time, boneKeyframeTime, floatTimeEpsilon)) {
+                            destGeneralKeyframeIndex = i
+                            break
+                        }
+                    }
+
+                    if(destGeneralKeyframeIndex) {
+                        keyframes[destGeneralKeyframeIndex].bones[boneName] = boneKeyframe
+                    } else {
+                        keyframes.push({
+                            time: boneKeyframeTime,
+                            bones: {
+                                [boneName]: boneKeyframe
+                            }
+                        })
                     }
                 }
             } else {
@@ -168,20 +281,18 @@ function exportBody(options) {
             }
         }
 
-        lfaKeyframes.sort((a, b) => a.time - b.time)
+        keyframes.sort((a, b) => a.time - b.time)
 
         builder.push('@clip name "')
         builder.push(animation.name)
-        builder.push('" duration ')
-        builder.push(duration)
         builder.push(' loop ')
         builder.push(looped)
 
         builder.push(' {')
 
-        for(const lfaKeyframe of lfaKeyframes) {
-            const kfTime = lfaKeyframe.time
-            const kfBones = lfaKeyframe.bones
+        for(const keyframe of keyframes) {
+            const kfTime = keyframe.time
+            const kfBones = keyframe.bones
 
             let atLeastOneBonePushed = false
             let bonesBuilder = [ ]
@@ -199,14 +310,31 @@ function exportBody(options) {
                 for(const channelName in kfBone) {
                     const channelData = kfBone[channelName]
 
-                    bonesBuilder.push(`\t\t\t@${channelName} out-`)
+                    bonesBuilder.push(`\t\t\t@${channelName} `)
 
-                    if(channelName === "rotation")
-                        bonesBuilder.push("rotation-interp")
-                    else
-                        bonesBuilder.push("interp")
+                    bonesBuilder.push("interp")
 
-                    bonesBuilder.push(' "' + BlockbenchInterpToLFA[channelName][channelData.outInterpolationType])
+                    bonesBuilder.push(' "')
+
+                    if(channelData.interp !== "cubic-spline")
+                        bonesBuilder.push(channelData.interp)
+                    else {
+                        const extra = channelData.extra
+
+                        customInterpsBuilder.push(`@interp id "${customInterpsCount++}" type "cubic-spline" {\n`)
+
+                        customInterpsBuilder.push(`\t@field name "in-tangent" value (${
+                            extra["in-tangent"].join(', ')
+                        })`)
+
+                        customInterpsBuilder.push(`\n\t@field name "out-tangent" value (${
+                            extra["out-tangent"].join(', ')
+                        })`)
+
+                        customInterpsBuilder.push("\n}\n\n")
+
+                        bonesBuilder.push(customInterpsCount)
+                    }
 
                     bonesBuilder.push(`" value (${channelData.value.join(', ')})\n`)
                 }
@@ -226,7 +354,7 @@ function exportBody(options) {
         builder.push("}")
     }
 
-    return [ builder, skeletonBones ]
+    return [ [ ...customInterpsBuilder, ...builder ], skeletonBones ]
 }
 
 export default function doExport(options) {
@@ -238,10 +366,8 @@ export default function doExport(options) {
 
     builder.push('@metadata version 1.0 ')
 
-    if(!relativizeTransforms) {
-        builder.push('relativize-transforms ')
-        builder.push(relativizeTransforms)
-    }
+    if(!relativizeTransforms)
+        builder.push('relativize-transforms false')
 
     builder.push('\n\n@skeleton {')
 
