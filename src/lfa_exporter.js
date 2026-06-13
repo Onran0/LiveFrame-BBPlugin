@@ -187,7 +187,7 @@ function exportBody(options) {
          */
         let keyframes = [ ]
 
-        for(const animatorKey in animation.animators) {
+        for(const animatorKey of Object.keys(animation.animators)) {
             const animator = animation.animators[animatorKey]
 
             let handled = true
@@ -209,7 +209,9 @@ function exportBody(options) {
                 }
 
                 for(const channel of Object.keys(channelKeyframes)) {
-                    const keyframes = animator[channel]
+                    let keyframes = structuredClone(animator[channel])
+
+                    keyframes.sort((a, b) => a.time - b.time)
 
                     for(let i = 0; i < keyframes.length; i++) {
                         let splitKeyframes
@@ -359,14 +361,14 @@ function exportBody(options) {
                 kfBodyBuilder.push('\n')
             }
 
-            for(const kfBoneName in kfBones) {
+            for(const kfBoneName of Object.keys(kfBones)) {
                 const kfBone = kfBones[kfBoneName]
 
                 atLeastOneElementPushed = true
 
                 kfBodyBuilder.push(`\n\t\t@bone name "${kfBoneName}" {\n`)
 
-                for(const channelName in kfBone) {
+                for(const channelName of Object.keys(kfBone)) {
                     const channelData = kfBone[channelName]
 
                     kfBodyBuilder.push(`\t\t\t@${channelName} `)
@@ -430,7 +432,7 @@ export default function doExport(options) {
 
     builder.push('\n\n@skeleton {')
 
-    for(const boneName in skeletonBones) {
+    for(const boneName of Object.keys(skeletonBones)) {
         const boneBindPose = skeletonBones[boneName]
 
         builder.push('\n\t@bone name "')
