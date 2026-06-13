@@ -83,8 +83,6 @@ function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
 
     const keyframe = keyframes[keyIndex]
 
-    let bake = false
-
     if(
         keyframe.interpolation === "step" ||
         keyframe.interpolation === "linear" ||
@@ -106,42 +104,7 @@ function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
                 interp: interp
             }
         )
-    } else if(keyframe.interpolation === "catmullrom") {
-        if(keyframes.length > 2) {
-            const key_prev = keyIndex === 0 ? keyframe : keyframes[keyIndex - 1]
-            const key_next = keyframes[keyIndex + 1]
-            const key_next_next = keyIndex === keyframes.length - 2 ? key_next : keyframes[keyIndex + 2]
-
-            const val_prev = avec3.from_object(key_prev.data_points[0])
-            let val_curr = avec3.from_object(keyframe.data_points[0])
-            const val_next = avec3.from_object(key_next.data_points[0])
-            const val_next_next = avec3.from_object(key_next_next.data_points[0])
-
-            let inTangent = avec3.div_scalar(avec3.sub(val_next, val_prev), 2)
-            let outTangent = avec3.div_scalar(avec3.sub(val_next_next, val_curr), 2)
-
-            // converting blockbench pixels to meters
-            if(channel === "position") {
-                val_curr = avec3.div_scalar(val_curr, 16)
-                inTangent = avec3.div_scalar(inTangent, 16)
-                outTangent = avec3.div_scalar(outTangent, 16)
-            }
-
-            finalKeyframes.push(
-                {
-                    time: keyframe.time,
-                    value: val_curr,
-                    interp: "cubic-spline",
-                    extra: {
-                        "in-tangent": inTangent,
-                        "out-tangent": outTangent
-                    }
-                }
-            )
-        } else bake = true
-    } else bake = true
-
-    if(bake) {
+    } else {
         let bakedKeyframes = bakeSegment(
             animator, channel,
             keyframe.time, keyframes[keyIndex + 1].time
@@ -152,7 +115,7 @@ function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
                 keyframe.interp = "lerp"
 
                 // converting blockbench pixels to meters
-                if(channel === "position")
+                if (channel === "position")
                     keyframe.value = avec3.div_scalar(keyframe.value, 16)
 
                 return keyframe
