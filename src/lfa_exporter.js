@@ -337,7 +337,7 @@ function exportBody(options) {
         builder.push('@clip name "')
         builder.push(animation.name)
         builder.push('" duration ')
-        builder.push(duration)
+        builder.push(prettify(duration))
         builder.push(' loop ')
         builder.push(looped)
 
