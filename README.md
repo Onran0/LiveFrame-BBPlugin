@@ -26,8 +26,8 @@ to which you want to export the animations.
 ### Animation events adding
 
 Use **Blockbench Animation Instructions** (`Animate effects -> Instructions -> Add`) for this.
-instead of **MoLang Expression**, type to the script
-event name, or event name and value, separated with `=`\
+Instead of **MoLang Expression**, type to the script
+event name, or event name and value, separated with `=`.\
 Example: `attack`, `attack=123`
 
 ## How to build?
