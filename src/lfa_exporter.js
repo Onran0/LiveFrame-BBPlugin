@@ -104,9 +104,19 @@ function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
             const key_next_next = keyIndex === keyframes.length - 2 ? key_next : keyframes[keyIndex + 2]
 
             const val_prev = avec3.from_object(key_prev.data_points[0])
-            const val_curr = avec3.from_object(keyframe.data_points[0])
+            let val_curr = avec3.from_object(keyframe.data_points[0])
             const val_next = avec3.from_object(key_next.data_points[0])
             const val_next_next = avec3.from_object(key_next_next.data_points[0])
+
+            let inTangent = avec3.div_scalar(avec3.sub(val_next, val_prev), 2)
+            let outTangent = avec3.div_scalar(avec3.sub(val_next_next, val_curr), 2)
+
+            // converting blockbench pixels to meters
+            if(channel === "position") {
+                val_curr = avec3.div_scalar(val_curr, 16)
+                inTangent = avec3.div_scalar(inTangent, 16)
+                outTangent = avec3.div_scalar(outTangent, 16)
+            }
 
             finalKeyframes.push(
                 {
@@ -114,8 +124,8 @@ function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
                     value: val_curr,
                     interp: "cubic-spline",
                     extra: {
-                        "in-tangent": avec3.div_scalar(avec3.sub(val_next, val_prev), 2),
-                        "out-tangent": avec3.div_scalar(avec3.sub(val_next_next, val_curr), 2)
+                        "in-tangent": inTangent,
+                        "out-tangent": outTangent
                     }
                 }
             )
@@ -131,6 +141,11 @@ function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
         bakedKeyframes.forEach(
             keyframe => {
                 keyframe.interp = "lerp"
+
+                // converting blockbench pixels to meters
+                if(channel === "position")
+                    keyframe.value = avec3.div_scalar(keyframe.value, 16)
+
                 return keyframe
             }
         )
