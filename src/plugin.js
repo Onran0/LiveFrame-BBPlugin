@@ -16,7 +16,7 @@
 
 const version = '1.0.0'
 
-import pluginIcon from '../assets/plugin/icon.png'
+import pluginIcon from '../assets/icon.png'
 
 import exportLfa from './lfa_exporter'
 
