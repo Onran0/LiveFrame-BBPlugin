@@ -90,16 +90,25 @@ function splitPositionOrScaleKeyframe(animator, keyframes, keyIndex, channel) {
         keyframe.interpolation === "linear" ||
         keyIndex === keyframes.length - 1
     ) {
+        let value = avec3.from_object(keyframe.data_points[0])
+        let interp = keyframe.interpolation === "step" ? "step" : "lerp"
+
+        if(channel === "position")
+            value = avec3.div_scalar(value, 16)
+
+        if(keyIndex === keyframes.length - 1)
+            interp = "step"
+
         finalKeyframes.push(
             {
                 time: keyframe.time,
-                value: avec3.from_object(keyframe.data_points[0]),
-                interp: keyframe.interpolation === "step" ? "step" : "lerp"
+                value: value,
+                interp: interp
             }
         )
     } else if(keyframe.interpolation === "catmullrom") {
         if(keyframes.length > 2) {
-            const key_prev = keyIndex === 0 ? keyframe : keyframes[keyframes.length - 1]
+            const key_prev = keyIndex === 0 ? keyframe : keyframes[keyIndex - 1]
             const key_next = keyframes[keyIndex + 1]
             const key_next_next = keyIndex === keyframes.length - 2 ? key_next : keyframes[keyIndex + 2]
 
@@ -173,6 +182,15 @@ function exportBody(options) {
         [
             {
                 "time": 0.5,
+                "events": [
+                    {
+                        "name": string
+                    },
+                    {
+                        "name": string,
+                        "rawValue": "(0, 1, 2)"
+                    }
+                ],
                 "bones": {
                     "spine": {
                         "position|scale": {
@@ -208,6 +226,8 @@ function exportBody(options) {
 
         for(const animatorKey in animation.animators) {
             const animator = animation.animators[animatorKey]
+
+            let handled = true
 
             if(['bone', 'armature_bone'].includes(animator.type) && animator.getGroup()) {
                 const group = animator.getGroup()
@@ -289,15 +309,60 @@ function exportBody(options) {
                     } else {
                         keyframes.push({
                             time: boneKeyframeTime,
+                            events: [ ],
                             bones: {
                                 [boneName]: boneKeyframe
                             }
                         })
                     }
                 }
-            } else {
+            } else if(animator instanceof EffectAnimator) {
+                for(const keyframe of animator.keyframes) {
+                    const script = keyframe.data_points[0].script
+
+                    if(script != null) {
+                        const time = keyframe.time
+
+                        const separatorIndex = script.indexOf('=')
+
+                        let event
+
+                        if(separatorIndex === -1) {
+                            event = {
+                                name: script
+                            }
+                        } else {
+                            event = {
+                                name: script.substring(0, separatorIndex),
+                                rawValue: script.substring(separatorIndex + 1)
+                            }
+                        }
+
+                        let destKeyframeIndex
+
+                        for(let i = 0;i < keyframes.length;i++) {
+                            if(isEqualsByEpsilon(keyframes[i].time, time, floatTimeEpsilon)) {
+                                destKeyframeIndex = i
+                                break
+                            }
+                        }
+
+                        if(destKeyframeIndex != null) {
+                            keyframes[destKeyframeIndex].events.push(event)
+                        } else {
+                            keyframes.push({
+                                time: time,
+                                events: [ event ],
+                                bones: [ ]
+                            })
+                        }
+                    } else handled = false
+                }
+            } else handled = false
+
+            if(!handled) {
                 console.error(
-                    `failed to export animator "${animatorKey}" in animation "${animation.name}" because it have unsupported type`
+                    `failed to export animator "${animatorKey}" (of type ${animator.type}) in animation "${animation.name}" because it have unsupported type or parameters`
                 )
             }
         }
@@ -317,34 +382,42 @@ function exportBody(options) {
             const kfTime = keyframe.time
             const kfBones = keyframe.bones
 
-            let atLeastOneBonePushed = false
-            let bonesBuilder = [ ]
+            let atLeastOneElementPushed = false
+            let kfBodyBuilder = [ ]
+
+            for(const event of keyframe.events) {
+                atLeastOneElementPushed = true
+
+                kfBodyBuilder.push(`\n\t\t@event name "${event.name}"`)
+
+                if(event.rawValue)
+                    kfBodyBuilder.push(` value ${event.rawValue}`)
+
+                kfBodyBuilder.push('\n')
+            }
 
             for(const kfBoneName in kfBones) {
                 const kfBone = kfBones[kfBoneName]
 
-                if(Object.keys(kfBone).length === 0)
-                    continue
+                atLeastOneElementPushed = true
 
-                atLeastOneBonePushed = true
-
-                bonesBuilder.push(`\n\t\t@bone name "${kfBoneName}" {\n`)
+                kfBodyBuilder.push(`\n\t\t@bone name "${kfBoneName}" {\n`)
 
                 for(const channelName in kfBone) {
                     const channelData = kfBone[channelName]
 
-                    bonesBuilder.push(`\t\t\t@${channelName} `)
+                    kfBodyBuilder.push(`\t\t\t@${channelName} `)
 
-                    bonesBuilder.push("interp")
+                    kfBodyBuilder.push("interp")
 
-                    bonesBuilder.push(' "')
+                    kfBodyBuilder.push(' "')
 
                     if(channelData.interp !== "cubic-spline")
-                        bonesBuilder.push(channelData.interp)
+                        kfBodyBuilder.push(channelData.interp)
                     else {
                         const extra = channelData.extra
 
-                        customInterpsBuilder.push(`@interp id "${customInterpsCount++}" type "cubic-spline" {\n`)
+                        customInterpsBuilder.push(`@interp id "${customInterpsCount}" type "cubic-spline" {\n`)
 
                         customInterpsBuilder.push(`\t@field name "in-tangent" value (${
                             prettyJoin(extra["in-tangent"], ', ')
@@ -356,19 +429,19 @@ function exportBody(options) {
 
                         customInterpsBuilder.push("\n}\n\n")
 
-                        bonesBuilder.push(customInterpsCount)
+                        kfBodyBuilder.push(customInterpsCount++)
                     }
 
-                    bonesBuilder.push(`" value (${prettyJoin(channelData.value, ', ')})\n`)
+                    kfBodyBuilder.push(`" value (${prettyJoin(channelData.value, ', ')})\n`)
                 }
 
-                bonesBuilder.push("\t\t}\n")
+                kfBodyBuilder.push("\t\t}\n")
             }
 
-            if(atLeastOneBonePushed) {
+            if(atLeastOneElementPushed) {
                 builder.push(`\n\t@keyframe time ${prettify(kfTime)} {`)
 
-                builder.push(...bonesBuilder)
+                builder.push(...kfBodyBuilder)
 
                 builder.push('\t}\n')
             }
