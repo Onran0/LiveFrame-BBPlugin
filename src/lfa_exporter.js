@@ -164,8 +164,8 @@ function exportBody(options) {
                             ],
 
                             "extra": {
-                                "in-tangent": [ 0, 0, 0 ],
-                                "out-tangent": [ 0, 0, 0 ]
+                                "start-tangent": [ 0, 0, 0 ],
+                                "end-tangent": [ 0, 0, 0 ]
                             },
 
                             "interp": "step|lerp|cubic-spline"
@@ -338,8 +338,11 @@ function exportBody(options) {
         builder.push(animation.name)
         builder.push('" duration ')
         builder.push(prettify(duration))
-        builder.push(' loop ')
-        builder.push(looped)
+
+        if(looped) {
+            builder.push(' loop ')
+            builder.push(looped)
+        }
 
         builder.push(' {')
 
@@ -384,12 +387,12 @@ function exportBody(options) {
 
                         customInterpsBuilder.push(`@interp id "${customInterpsCount}" type "cubic-spline" {\n`)
 
-                        customInterpsBuilder.push(`\t@field name "in-tangent" value (${
-                            prettyJoin(extra["in-tangent"], ', ')
+                        customInterpsBuilder.push(`\t@field name "start-tangent" value (${
+                            prettyJoin(extra["start-tangent"], ', ')
                         })`)
 
-                        customInterpsBuilder.push(`\n\t@field name "out-tangent" value (${
-                            prettyJoin(extra["out-tangent"], ', ')
+                        customInterpsBuilder.push(`\n\t@field name "end-tangent" value (${
+                            prettyJoin(extra["end-tangent"], ', ')
                         })`)
 
                         customInterpsBuilder.push("\n}\n\n")
