@@ -385,7 +385,9 @@ function exportBody(options) {
                     else {
                         const extra = channelData.extra
 
-                        customInterpsBuilder.push(`@interp id "${customInterpsCount}" type "cubic-spline" {\n`)
+                        customInterpsBuilder.push(`@interp id "${customInterpsCount}" type "cubic-spline" target "${
+                            channelName === "rotation" ? "quat" : "vec3"
+                        }" {\n`)
 
                         customInterpsBuilder.push(`\t@field name "start-tangent" value (${
                             prettyJoin(extra["start-tangent"], ', ')
@@ -422,7 +424,7 @@ function exportBody(options) {
 }
 
 export default function doExport(options) {
-    const relativizeTransforms = options.relativizeTransforms
+    const relativizeKeys = options.relativizeKeys
 
     let [ bodyBuilder, skeletonBones ] = exportBody(options)
 
@@ -430,8 +432,8 @@ export default function doExport(options) {
 
     builder.push('@metadata version 1.0 ')
 
-    if(!relativizeTransforms)
-        builder.push('relativize-transforms false')
+    if(!relativizeKeys)
+        builder.push('relativize-keys false')
 
     builder.push('\n\n@skeleton {')
 

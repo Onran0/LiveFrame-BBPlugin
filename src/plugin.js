@@ -14,7 +14,7 @@
  *    limitations under the License.
  */
 
-const version = '1.0.0'
+const version = '1.0.1'
 
 import pluginIcon from '../assets/plugin/icon.png'
 
@@ -42,9 +42,9 @@ Plugin.register('liveframe_plugin', {
             name: name,
             extension: 'lfa',
             export_options: {
-                relativizeTransforms: {
+                relativizeKeys: {
                     type: "checkbox",
-                    label: "liveframe-plugin.export.lfa.relativize_transforms",
+                    label: "liveframe-plugin.export.lfa.relativize_keys",
                     value: true
                 }
             },
